@@ -391,6 +391,33 @@
         <mxCell id="-ZFRYzIxIYVkRaBdqasn-77" value="Totale" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" vertex="1" parent="1">
           <mxGeometry x="1270" y="900" width="60" height="30" as="geometry" />
         </mxCell>
+        <mxCell id="-ZFRYzIxIYVkRaBdqasn-81" value="" style="endArrow=none;html=1;rounded=0;exitX=0.5;exitY=0;exitDx=0;exitDy=0;" edge="1" parent="1" source="yCjGENrAkwQ1DedbjbAy-23">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="1040" y="720" as="sourcePoint" />
+            <mxPoint x="1010" y="660" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="-ZFRYzIxIYVkRaBdqasn-82" value="Prezzo" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="980" y="630.5" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="-ZFRYzIxIYVkRaBdqasn-83" value="" style="endArrow=none;html=1;rounded=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="1" target="yCjGENrAkwQ1DedbjbAy-25">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="1070" y="620" as="sourcePoint" />
+            <mxPoint x="1110" y="620" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="-ZFRYzIxIYVkRaBdqasn-84" value="Quantità" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="1020" y="600.5" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="-ZFRYzIxIYVkRaBdqasn-86" value="" style="endArrow=none;html=1;rounded=0;" edge="1" parent="1">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="720" y="700" as="sourcePoint" />
+            <mxPoint x="720" y="650" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="-ZFRYzIxIYVkRaBdqasn-87" value="Data_richiesta" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" vertex="1" parent="1">
+          <mxGeometry x="690" y="620.5" width="60" height="30" as="geometry" />
+        </mxCell>
       </root>
     </mxGraphModel>
   </diagram>
