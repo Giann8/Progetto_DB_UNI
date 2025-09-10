@@ -7,7 +7,7 @@ CREATE TABLE manager (
 
 CREATE TABLE clienti (
     C_F VARCHAR(100) PRIMARY KEY,
-    name VARCHAR(100),
+    name VARCHAR(100) NOT NULL,
     email VARCHAR(100) UNIQUE,
     password VARCHAR(100) NOT NULL
 );
@@ -31,9 +31,9 @@ CREATE TABLE fatture(
     id SERIAL PRIMARY KEY,
     cliente VARCHAR(100) NOT NULL,
     sconto DECIMAL(5, 2) DEFAULT 0.00,
-    data_emissione DATE NOT NULL,
+    data_emissione DATE DEFAULT CURRENT_DATE NOT NULL,
     totale DECIMAL(10, 2) DEFAULT 0.00,
-    FOREIGN KEY (cliente) REFERENCES clienti(C_F) ON DELETE SET NULL
+    FOREIGN KEY (cliente) REFERENCES clienti(C_F) ON DELETE CASCADE
 );
 
 CREATE TABLE fornitori (
@@ -69,34 +69,39 @@ CREATE TABLE prodotto_fornitore (
 
 CREATE TABLE ordini(
     id SERIAL PRIMARY KEY,
-    fornitore VARCHAR(100) NOT NULL,
-    manager_richiedente VARCHAR(100) NOT NULL,
-    negozio INT NOT NULL,
-    prodotto INT NOT NULL,
+    fornitore VARCHAR(100) ,
+    manager_richiedente VARCHAR(100) ,
+    negozio INT ,
+    prodotto INT ,
     quantita INT NOT NULL,
     prezzo INT NOT NULL,
     data_consegna DATE NOT NULL DEFAULT CURRENT_DATE + INTERVAL '7 days',
-    FOREIGN KEY (manager_richiedente) REFERENCES manager(C_F) ON DELETE SET NULL,
-    FOREIGN KEY (negozio) REFERENCES negozi(id) ON DELETE SET NULL,
-    FOREIGN KEY (prodotto) REFERENCES prodotti(id),
-    FOREIGN KEY (fornitore) REFERENCES fornitori(P_IVA)
+    FOREIGN KEY (manager_richiedente) REFERENCES manager(C_F) ON DELETE CASCADE,
+    FOREIGN KEY (negozio) REFERENCES negozi(id) ON DELETE CASCADE,
+    FOREIGN KEY (prodotto) REFERENCES prodotti(id) ON DELETE CASCADE,
+    FOREIGN KEY (fornitore) REFERENCES fornitori(P_IVA) ON DELETE CASCADE
 );
 
 CREATE TABLE riga_fattura (
     fattura INT,
     prodotto INT,
+    negozio INT,
     quantita INT NOT NULL CHECK (quantita > 0),
     subtotale DECIMAL(10, 2),
     FOREIGN KEY (fattura) REFERENCES fatture(id) ON DELETE CASCADE,
-    FOREIGN KEY (prodotto) REFERENCES prodotti(id),
+    FOREIGN KEY (prodotto) REFERENCES prodotti(id) ON DELETE CASCADE,
+    FOREIGN KEY (negozio) REFERENCES negozi(id) ON DELETE CASCADE,
     PRIMARY KEY (fattura, prodotto)
 );
 
 CREATE TABLE storico_tessere(
     tessera_id_originale SERIAL PRIMARY KEY,
+    negozio_id INT NOT NULL,
+    negozio_nome VARCHAR(100) NOT NULL,
     cliente VARCHAR(100) REFERENCES clienti(C_F) ON DELETE CASCADE,
     punti INT DEFAULT 0,
-    data_rilascio DATE NOT NULL
+    data_rilascio DATE NOT NULL,
+    data_eliminazione_negozio DATE NOT NULL
 );
 
 -- Funzione per l'hashing MD5 delle password
@@ -116,6 +121,25 @@ CREATE TRIGGER hash_password_manager BEFORE
 INSERT
     OR
 UPDATE OF password ON manager FOR EACH ROW EXECUTE FUNCTION md5_hash_password();
+
+-- Funzione per normalizzare l'input
+CREATE OR REPLACE FUNCTION normalizzaInput() RETURNS TRIGGER AS $$
+BEGIN
+    NEW.email = LOWER(NEW.email);
+    NEW.C_F = UPPER(NEW.C_F);
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger per normalizzare l'input all'inserimento dei clienti
+CREATE TRIGGER normalizeInput 
+BEFORE INSERT OR UPDATE ON clienti
+FOR EACH ROW EXECUTE FUNCTION normalizzaInput();
+
+-- Trigger per normalizzare l'input all'inserimento dei manager
+CREATE TRIGGER normalizeInput 
+BEFORE INSERT OR UPDATE ON manager
+FOR EACH ROW EXECUTE FUNCTION normalizzaInput();
 
 -- Inserimento manager
 INSERT INTO manager (c_f, name, email, password)
@@ -242,41 +266,29 @@ VALUES
 
 
 
-CREATE OR REPLACE FUNCTION rilascia_tessera_fidelity(cliente_cf VARCHAR, negozio_id INT) RETURNS VOID AS $$
-DECLARE
-    nome_negozio VARCHAR;
-BEGIN
-    INSERT INTO fidelity_card (cliente, negozio, punti, data_rilascio)
-    VALUES (cliente_cf, negozio_id, 0, CURRENT_DATE);
-    
-    SELECT name INTO nome_negozio FROM negozi WHERE id = negozio_id;
-    RAISE NOTICE 'Tessera fedeltà rilasciata al cliente % dal %', cliente_cf, nome_negozio;
-END;
-$$ LANGUAGE plpgsql;
 
 -- Funzione per il trigger di validazione tessere fedeltà
 CREATE OR REPLACE FUNCTION validate_fidelity_card() RETURNS TRIGGER AS $$
 BEGIN
     -- Controlla se il cliente esiste
-    IF NOT EXISTS (SELECT 1 FROM clienti WHERE c_f = NEW.cliente) THEN
+    PERFORM * FROM clienti WHERE c_f = NEW.cliente;
+    IF NOT FOUND THEN
         RAISE EXCEPTION 'Cliente con codice fiscale % non trovato', NEW.cliente;
     END IF;
     
     -- Controlla se il negozio esiste
-    IF NOT EXISTS (SELECT 1 FROM negozi WHERE id = NEW.negozio) THEN
+    PERFORM * FROM negozi WHERE id = NEW.negozio;
+    IF NOT FOUND THEN
         RAISE EXCEPTION 'Negozio con ID % non trovato', NEW.negozio;
     END IF;
-    
-    -- Messaggio di duplicato anche se Unique già presente come constraint
-    IF TG_OP = 'INSERT' AND EXISTS (SELECT 1 FROM fidelity_card WHERE cliente = NEW.cliente) THEN
-        RAISE EXCEPTION 'Il cliente % ha già una tessera fedeltà', NEW.cliente;
-    END IF;
-    
 
     IF NEW.punti < 0 THEN
-        RAISE EXCEPTION 'I punti della tessera fedeltà non possono essere negativi';
+        RAISE NOTICE 'I punti della tessera fedeltà non possono essere negativi';
+        NEW.punti = 0;
     END IF;
-    
+
+    RAISE NOTICE 'Tessera fedeltà rilasciata al cliente % dal %', NEW.cliente, NEW.negozio;
+
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -305,7 +317,7 @@ SELECT
 FROM negozi n
 JOIN prodotto_negozio pn ON n.id = pn.negozio
 JOIN prodotti p ON pn.prodotto = p.id
-ORDER BY n.name, p.name;
+ORDER BY p.name,pn.prezzo_unitario ASC,pn.disponibilita DESC;
 
 -- VIEW: Solo prodotti disponibili
 CREATE VIEW prodotti_disponibili AS 
@@ -323,13 +335,14 @@ ORDER BY n.name, pn.prezzo_unitario;
 -- VIEW: Tessere con più di 300 punti
 CREATE VIEW tessere_maggiori_punti AS
 SELECT 
-    fc.cliente as cliente_cf,
+    fc.cliente as cliente_c_f,
     c.name as cliente_nome,
     fc.id as tessera_id,
-    fc.punti as saldo_punti
+    fc.punti as punti,
+    fc.data_rilascio as data_rilascio
 FROM fidelity_card fc JOIN clienti c on fc.cliente = c.C_F
 WHERE fc.punti >= 300
-ORDER BY saldo_punti DESC, cliente_cf DESC;
+ORDER BY punti DESC, cliente_c_f DESC;
 
 -- Funzione per aggiungere manualmente punti al cliente (probabilmente eliminabile)
 CREATE OR REPLACE FUNCTION aggiorna_punti_fidelity() RETURNS TRIGGER AS $$
@@ -368,62 +381,53 @@ END;
 $$ LANGUAGE plpgsql;
 
 
--- Ordina da fornitore per costo inferiore
-CREATE OR REPLACE FUNCTION fornitore_costo_inferiore(prodotto_id INT, quantita INT) 
-RETURNS TABLE(fornitore VARCHAR, prezzo_unitario DECIMAL) AS $$
-BEGIN
-    RETURN QUERY
-    SELECT pf.fornitore, pf.prezzo_unitario
-    FROM prodotto_fornitore pf
-    WHERE pf.prodotto = prodotto_id 
-      AND pf.disponibilita >= quantita
-      AND pf.prezzo_unitario = (
-          SELECT MIN(pf2.prezzo_unitario)
-          FROM prodotto_fornitore pf2
-          WHERE pf2.prodotto = prodotto_id AND pf2.disponibilita >= quantita
-      );
-END;
-$$ LANGUAGE plpgsql;
-
 -- Ordina prodotto da fornitore
-CREATE OR REPLACE FUNCTION ordina_prodotto(prodotto_id INT, quantita INT, manager_CF VARCHAR, negozio INT) RETURNS VOID AS $$
+CREATE OR REPLACE FUNCTION convalida_ordine_prodotto() RETURNS TRIGGER AS $$
 DECLARE
     fornitore_migliore VARCHAR;
     prezzo_migliore DECIMAL;
-    ordine_id INT;
 BEGIN
-    -- Trova il fornitore con il prezzo più basso usando la funzione fornitore_costo_inferiore
-    SELECT fornitore, prezzo_unitario 
-    INTO fornitore_migliore, prezzo_migliore
-    FROM fornitore_costo_inferiore(prodotto_id, quantita)
-    LIMIT 1;
-    
+    -- Trova direttamente il fornitore con il prezzo più basso e disponibilità sufficiente
+ select pf.fornitore, MIN(pf.prezzo_unitario) as prezzo 
+ INTO fornitore_migliore, prezzo_migliore
+ from prodotto_fornitore pf 
+ where pf.prodotto=NEW.prodotto and pf.disponibilita >= NEW.quantita
+ group by pf.fornitore
+ ORDER BY prezzo ASC
+ LIMIT 1;
+
     -- Verifica che sia stato trovato un fornitore
     IF fornitore_migliore IS NULL THEN
-        RAISE EXCEPTION 'Nessun fornitore trovato per il prodotto con ID %', prodotto_id;
+        RAISE EXCEPTION 'Nessun fornitore trovato per il prodotto con ID %', NEW.prodotto;
     END IF;
     
     -- Verifica che il manager esista
-    PERFORM * FROM manager WHERE C_F = manager_CF;
+    PERFORM * FROM manager WHERE C_F = NEW.manager_richiedente;
     IF NOT FOUND THEN
-        RAISE EXCEPTION 'Manager con codice fiscale % non trovato', manager_CF;
+        RAISE EXCEPTION 'Manager con codice fiscale % non trovato', NEW.manager_richiedente;
     END IF;
     
     -- Verifica che il negozio esista
-    PERFORM * FROM negozi WHERE id = negozio;
+    PERFORM * FROM negozi WHERE id = NEW.negozio;
     IF NOT FOUND THEN
-        RAISE EXCEPTION 'Negozio con ID % non trovato', negozio;
+        RAISE EXCEPTION 'Negozio con ID % non trovato', NEW.negozio;
     END IF;
 
-    -- Crea l'ordine nella tabella ordini
-    INSERT INTO ordini (fornitore, prodotto, manager_richiedente, quantita, prezzo, data_consegna, negozio)
-    VALUES (fornitore_migliore, prodotto_id, manager_CF, quantita, prezzo_migliore * quantita, CURRENT_DATE + INTERVAL '7 days', negozio)
-    RETURNING id INTO ordine_id;
-    
-    RAISE NOTICE 'Ordine % creato: % unità del prodotto % dal fornitore % al prezzo di €% per unità. Manager: %. Data di consegna: %', 
-                 ordine_id, quantita, prodotto_id, fornitore_migliore, prezzo_migliore, manager_CF, CURRENT_DATE + INTERVAL '7 days';
+    NEW.fornitore := fornitore_migliore;
+    NEW.prezzo := prezzo_migliore * NEW.quantita;
+
+    RAISE NOTICE 'Ordine % creato: % unità del prodotto % dal fornitore % al prezzo di €% per unità. Manager: %. Data di consegna: %',
+                 NEW.id, NEW.quantita, NEW.prodotto, fornitore_migliore, prezzo_migliore, NEW.manager_richiedente, CURRENT_DATE + INTERVAL '7 days';
+RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
+
+
+-- Trigger per convalidare l'ordine del prodotto
+CREATE TRIGGER convalida_ordine_prodotto
+BEFORE INSERT ON ordini
+FOR EACH ROW
+EXECUTE FUNCTION convalida_ordine_prodotto();
 
 -- Funzione per aggiornare disponibilità prodotti dal fornitore
 CREATE OR REPLACE FUNCTION aggiorna_disponibilita_prodotto_fornitore() RETURNS TRIGGER AS $$
@@ -448,7 +452,7 @@ CREATE TRIGGER aggiorna_disponibilita_prodotto_fornitore AFTER INSERT ON ordini
 
 -- View per gli sconti dei clienti
 CREATE VIEW sconti_clienti AS (
-    SELECT c.name, c.C_F, fc.punti,
+    SELECT c.name, c.C_F as cliente, fc.punti,
            CASE
                WHEN fc.punti >= 300 THEN 30.00
                WHEN fc.punti >= 200 THEN 15.00
@@ -498,49 +502,102 @@ EXECUTE FUNCTION aggiorna_disponibilita_prodotto_negozio();
 
 -- Funzione trigger per aggiungere tessere nello storico
 CREATE OR REPLACE FUNCTION aggiorna_tessere_negozi_eliminati() RETURNS TRIGGER AS $$
-BEGIN  
-    INSERT INTO storico_tessere (tessera_id_originale, cliente, punti, data_rilascio)
-    VALUES (OLD.id, OLD.cliente, OLD.punti, OLD.data_rilascio);
-    
+DECLARE
+    tessera_record RECORD;
+BEGIN
+    -- Itera su tutte le tessere del negozio eliminato
+    FOR tessera_record IN 
+        SELECT id, cliente, punti, data_rilascio 
+        FROM fidelity_card 
+        WHERE negozio = OLD.id
+    LOOP
+        INSERT INTO storico_tessere (tessera_id_originale, negozio_id, negozio_nome, cliente, punti, data_rilascio,data_eliminazione_negozio)
+        VALUES (tessera_record.id, OLD.id, OLD.name, tessera_record.cliente, tessera_record.punti, tessera_record.data_rilascio, CURRENT_DATE);
+        DELETE FROM fidelity_card WHERE id = tessera_record.id;
+        RAISE NOTICE 'Tessera % del cliente % spostata nello storico', tessera_record.id, tessera_record.cliente;
+    END LOOP;
+
     RETURN OLD;
 END;
 $$ LANGUAGE plpgsql;
 
 -- Trigger che inserisce le tessere rilasciate dal negozio eliminato nella tabella storico_tessere
 CREATE TRIGGER aggiorna_tessere_negozi_eliminati_trigger
-AFTER DELETE ON negozi
+BEFORE DELETE ON negozi
 FOR EACH ROW
 EXECUTE FUNCTION aggiorna_tessere_negozi_eliminati();
 
 -- Funzione per rilasciare una fattura
-CREATE or REPLACE function rilascia_fattura(cliente_c_f VARCHAR, totale NUMERIC, scontato BOOLEAN) RETURNS VOID AS $$
+CREATE or REPLACE function valida_fattura() RETURNS TRIGGER AS $$
 DECLARE
     punti_decurtati INT;
     sconto_percentuale NUMERIC DEFAULT 0;
-    sconto_euro DECIMAL(10,2);
+    sconto_euro DECIMAL(10,2) DEFAULT 0;
     totale_effettivo DECIMAL(10, 2);
-    nuova_fattura_id INT;
 BEGIN
-    IF scontato THEN
-        SELECT sc.punti,sc.sconto_percentuale INTO punti_decurtati,sconto_percentuale
-        FROM sconti_clienti sc
-        WHERE sc.C_F = cliente_c_f;
-        IF FOUND AND sconto_percentuale > 0 THEN
-            UPDATE fidelity_card SET punti = punti - punti_decurtati WHERE cliente = cliente_c_f;
-        ELSE
-            RAISE NOTICE 'Cliente % non ha punti sufficienti per uno sconto o non ha una tessera fidelity. Nessuno sconto verrà applicato.', cliente_c_f;
+    SELECT sc.punti, sc.sconto_percentuale
+    FROM sconti_clienti sc
+    WHERE sc.cliente = NEW.cliente 
+    INTO punti_decurtati, sconto_percentuale;
+    IF FOUND AND NEW.sconto <= sconto_percentuale THEN
+
+        sconto_euro := NEW.totale * (sconto_percentuale / 100);
+        
+
+        IF sconto_euro > 100 THEN 
+            sconto_euro := 100; 
         END IF;
+        
+
+        UPDATE fidelity_card 
+        SET punti = punti - punti_decurtati 
+        WHERE cliente = NEW.cliente;
+        
+        RAISE NOTICE 'Sconto applicato per il cliente %: €%', NEW.cliente, sconto_euro;
+    ELSE
+        RAISE NOTICE 'Sconto non applicato per il cliente %', NEW.cliente;
     END IF;
     
-        sconto_euro := (totale * sconto_percentuale / 100);
-        IF sconto_euro > 100 THEN sconto_euro := 100;
-        totale_effettivo := totale - sconto_euro ;
-    END IF;
 
-    INSERT INTO fatture (cliente, totale,sconto,data_emissione)
-    VALUES (cliente_c_f, totale_effettivo, sconto_percentuale, CURRENT_DATE)
-    RETURNING id INTO nuova_fattura_id;
+    totale_effettivo := NEW.totale - sconto_euro;
 
-    RAISE NOTICE 'Fattura % rilasciata per il cliente %: totale €% scontato a €%', nuova_fattura_id, cliente_c_f, totale, totale_effettivo;
+
+    NEW.totale := totale_effettivo;
+    NEW.sconto := sconto_percentuale;
+
+    RAISE NOTICE 'Fattura rilasciata per il cliente %: totale originale €%, totale finale €%', 
+                 NEW.cliente, (NEW.totale + sconto_euro), NEW.totale;
+    
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+CREATE TRIGGER rilascia_fattura_trigger
+BEFORE INSERT ON fatture
+FOR EACH ROW
+EXECUTE FUNCTION valida_fattura();
+
+-- VIEW che permette di visualizzare lo storico degli ordini in modo approfondito
+CREATE VIEW storicoOrdineApprofondito AS
+SELECT o.id, o.fornitore AS id_fornitore, f.name AS nome_fornitore, o.manager_richiedente, o.negozio as id_negozio, n.name AS nome_negozio, o.prodotto as id_prodotto, p.name AS nome_prodotto, o.quantita, o.prezzo, o.data_consegna
+FROM ordini o
+JOIN fornitori f ON o.fornitore = f.p_iva
+JOIN negozi n ON o.negozio = n.id
+JOIN prodotti p ON o.prodotto = p.id
+ORDER BY o.data_consegna DESC; 
+
+-- Funzione per ottenere lo storico ordini di un fornitore specifico
+CREATE OR REPLACE FUNCTION storicoOrdiniFornitore(p_iva VARCHAR)
+RETURNS TABLE(id INT, id_fornitore VARCHAR,nome_fornitore VARCHAR, manager_richiedente VARCHAR, id_negozio INT,nome_negozio VARCHAR, id_prodotto int,nome_prodotto VARCHAR,quantita int,prezzo int, data_consegna DATE) AS $$
+BEGIN
+IF p_iva IS NOT NULL THEN
+    RETURN QUERY
+    SELECT *
+    FROM storicoOrdineApprofondito soa
+    WHERE soa.id_fornitore = p_iva
+    ORDER BY soa.data_consegna DESC;
+    ELSE 
+    RAISE WARNING 'Partita IVA non valida';
+END IF;
 END;
 $$ LANGUAGE plpgsql;
