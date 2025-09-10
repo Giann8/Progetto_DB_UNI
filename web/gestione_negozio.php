@@ -203,7 +203,7 @@ if ($negozio_id) {
         <?php if (isset($error_message)): ?>
             <div class="alert alert-danger alert-dismissible fade show" role="alert">
                 <i class="bi bi-exclamation-triangle me-2"></i>
-                <?php echo $error_message; ?>
+                <?php echo htmlspecialchars($error_message); ?>
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
         <?php endif; ?>
@@ -211,7 +211,7 @@ if ($negozio_id) {
         <?php if (isset($success_message)): ?>
             <div class="alert alert-success alert-dismissible fade show" role="alert">
                 <i class="bi bi-check-circle me-2"></i>
-                <?php echo $success_message; ?>
+                <?php echo htmlspecialchars($success_message); ?>
                 <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
             </div>
         <?php endif; ?>

@@ -105,15 +105,6 @@ $prodotti_fornitore_ids = array_column($prodotti_fornitore, 'id');
 $prodotti_disponibili = array_filter($tutti_prodotti, function($prodotto) use ($prodotti_fornitore_ids) {
     return !in_array($prodotto['id'], $prodotti_fornitore_ids);
 });
-
-// Dati di esempio se il fornitore non esiste (da rimuovere quando implementi le funzioni)
-if (!$fornitore) {
-    $fornitore = [
-        'p_iva' => $p_iva,
-        'name' => 'Fornitore di Esempio',
-        'indirizzo' => 'Via Roma 123, Milano'
-    ];
-}
 ?>
 
 <!DOCTYPE html>

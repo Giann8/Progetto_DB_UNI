@@ -29,7 +29,6 @@ function createBill($cartItems, $wantSconto = FALSE): array
     }
     if ($wantSconto) {
         $bill['sconto'] = getScontoCliente($_SESSION['user_id']);
-        print_r($bill['sconto']);
     }
 
     return $bill;
