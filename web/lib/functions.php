@@ -140,6 +140,7 @@ function getInfoProdotto($prodotto_id): array
 
     if (isset($resource) && !is_null($resource)) {
         $prodotto = pg_fetch_array($resource, NULL, PGSQL_ASSOC);
+        ## fatto per utilizzo in foreach
         pg_free_result($resource);
         return $prodotto;
     }
@@ -242,11 +243,15 @@ function changeCustomerPassword($customer_id, $new_password, $current_password):
     }
     $resource = pg_execute($db, "change_customer_password", $params);
 
+
     if (!$resource) {
         echo "Errore nell'esecuzione della query: " . pg_last_error($db);
         return false;
     }
-    return $resource !== false;
+    if (pg_affected_rows($resource) > 0) {
+        return true;
+    }
+    return false;
 }
 
 function changeManagerPassword($manager_id, $new_password, $current_password): bool
@@ -266,8 +271,10 @@ function changeManagerPassword($manager_id, $new_password, $current_password): b
         echo "Errore nell'esecuzione della query: " . pg_last_error($db);
         return false;
     }
-    return $resource !== false;
-}
+    if (pg_affected_rows($resource) > 0) {
+        return true;
+    }
+    return false;}
 
 function richiediTesseraFedelta($cliente_id, $negozio_id): bool
 {

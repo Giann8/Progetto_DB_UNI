@@ -15,11 +15,11 @@ if (!isLoggedIn() || !isManager()) {
 
 if (isset($_POST['action']) && $_POST['action'] === 'change_password') {
     if ($_POST['new_password'] !== $_POST['confirm_password']) {
-        $error = "Le password non corrispondono.";
-    } else if (!changeManagerPassword($_SESSION['user_id'], $_POST['new_password'], $_POST['current_password'])) {
-        $error = "Errore nella modifica della password.";
+        $error_message = "Le password non corrispondono.";
+    } else if (changeManagerPassword($_SESSION['user_id'], $_POST['new_password'], $_POST['current_password'])) {
+        $success_message = "Password modificata con successo.";
     } else {
-        $success = "Password modificata con successo.";
+        $error_message = "Errore nella modifica della password.";
     }
 }
 $tessere = getTessereMaggioriPunti();
@@ -46,6 +46,19 @@ $storicoTessere = getStoricoTessere();
         </div>
     </header>
     <main class="container my-5">
+        <?php if (isset($error_message)): ?>
+            <div class="alert alert-danger alert-dismissible fade show mt-3" role="alert">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                <?php echo $error_message; ?>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        <?php elseif (isset($success_message)): ?>
+            <div class="alert alert-success alert-dismissible fade show mt-3" role="alert">
+                <i class="bi bi-check-circle me-2"></i>
+                <?php echo $success_message; ?>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        <?php endif; ?>
         <div class="row">
             <div class="col-md-8">
                 <div class="card mb-4">
@@ -175,7 +188,7 @@ $storicoTessere = getStoricoTessere();
                         <?php endif; ?>
                     </div>
                 </div>
-                
+
                 <div class="card mt-3">
                     <div class="card-header">
                         <h4><i class="bi bi-info-circle me-2"></i>Informazioni Sistema</h4>
@@ -189,7 +202,7 @@ $storicoTessere = getStoricoTessere();
                 </div>
             </div>
         </div>
-        
+
         <!-- Sezione Storico Tessere a tutta larghezza -->
         <div class="row mt-5">
             <div class="col-12">
@@ -257,7 +270,7 @@ $storicoTessere = getStoricoTessere();
                                     </tbody>
                                 </table>
                             </div>
-                            
+
                             <!-- Statistiche riassuntive -->
                             <div class="row mt-3">
                                 <div class="col-md-4">

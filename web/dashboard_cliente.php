@@ -14,10 +14,12 @@ if (!isLoggedIn() || !isCliente()) {
 }
 
 if (isset($_POST['action']) && $_POST['action'] === 'change_password') {
-    if($_POST['new_password'] !== $_POST['confirm_password']){
-        $error = "Le password non corrispondono.";
-    } else if(!changeCustomerPassword($_SESSION['user_id'], $_POST['new_password'], $_POST['current_password'])){
-        $error = "Errore nella modifica della password.";
+    if ($_POST['new_password'] !== $_POST['confirm_password']) {
+        $error_message = "Le password non corrispondono.";
+    } else if (changeCustomerPassword($_SESSION['user_id'], $_POST['new_password'], $_POST['current_password'])) {
+        $success_message = "Password modificata con successo.";
+    } else {
+        $error_message = "Errore nella modifica della password.";
     }
 }
 $bills = getUserBills($_SESSION['user_id']);
@@ -45,6 +47,19 @@ $_SESSION['tessera'] = getTesseraFedelta($_SESSION['user_id']);
         </div>
     </header>
     <main class="container my-5">
+        <?php if (isset($error_message)): ?>
+            <div class="alert alert-danger alert-dismissible fade show mt-3" role="alert">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                <?php echo $error_message; ?>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        <?php elseif (isset($success_message)): ?>
+            <div class="alert alert-success alert-dismissible fade show mt-3" role="alert">
+                <i class="bi bi-check-circle me-2"></i>
+                <?php echo $success_message; ?>
+                <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
+            </div>
+        <?php endif; ?>
         <div class="row">
             <div class="col-md-6">
                 <div class="card mb-4">
@@ -59,7 +74,7 @@ $_SESSION['tessera'] = getTesseraFedelta($_SESSION['user_id']);
                     </div>
                 </div>
             </div>
-            
+
             <div class="col-md-6">
                 <div class="card mb-4">
                     <div class="card-header">
@@ -69,7 +84,7 @@ $_SESSION['tessera'] = getTesseraFedelta($_SESSION['user_id']);
                         <?php if ($_SESSION['tessera']): ?>
                             <p><strong>ID Tessera:</strong> <?php echo $_SESSION['tessera']['id']; ?></p>
                             <p><strong>Data Rilascio:</strong> <?php echo $_SESSION['tessera']['data_rilascio']; ?></p>
-                            <p><strong>Saldo punti:</strong> 
+                            <p><strong>Saldo punti:</strong>
                                 <span class="badge bg-success fs-6"><?php echo $_SESSION['tessera']['punti']; ?> punti</span>
                             </p>
                         <?php else: ?>
@@ -82,7 +97,7 @@ $_SESSION['tessera'] = getTesseraFedelta($_SESSION['user_id']);
                 </div>
             </div>
         </div>
-        
+
         <div class="card mb-4">
             <div class="card-header">
                 <h3><i class="bi bi-receipt me-2"></i>Le tue fatture</h3>
@@ -93,17 +108,17 @@ $_SESSION['tessera'] = getTesseraFedelta($_SESSION['user_id']);
                         <?php foreach ($bills as $index => $bill): ?>
                             <div class="accordion-item">
                                 <h2 class="accordion-header" id="heading<?php echo $index; ?>">
-                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse" 
-                                            data-bs-target="#collapse<?php echo $index; ?>" aria-expanded="false" 
-                                            aria-controls="collapse<?php echo $index; ?>">
+                                    <button class="accordion-button collapsed" type="button" data-bs-toggle="collapse"
+                                        data-bs-target="#collapse<?php echo $index; ?>" aria-expanded="false"
+                                        aria-controls="collapse<?php echo $index; ?>">
                                         <div class="d-flex justify-content-between align-items-center w-100 me-3">
                                             <span><strong>Fattura #<?php echo $bill['id']; ?></strong></span>
                                             <span class="text-muted">€<?php echo number_format($bill['totale'], 2); ?> - <?php echo $bill['data_emissione']; ?></span>
                                         </div>
                                     </button>
                                 </h2>
-                                <div id="collapse<?php echo $index; ?>" class="accordion-collapse collapse" 
-                                     aria-labelledby="heading<?php echo $index; ?>" data-bs-parent="#accordionFatture">
+                                <div id="collapse<?php echo $index; ?>" class="accordion-collapse collapse"
+                                    aria-labelledby="heading<?php echo $index; ?>" data-bs-parent="#accordionFatture">
                                     <div class="accordion-body">
                                         <div class="table-responsive">
                                             <table class="table table-sm">
@@ -148,7 +163,7 @@ $_SESSION['tessera'] = getTesseraFedelta($_SESSION['user_id']);
                 <?php endif; ?>
             </div>
         </div>
-        
+
         <div class="card">
             <div class="card-header">
                 <h3><i class="bi bi-key me-2"></i>Modifica password</h3>
@@ -172,17 +187,10 @@ $_SESSION['tessera'] = getTesseraFedelta($_SESSION['user_id']);
                         <i class="bi bi-check-circle me-2"></i>Cambia Password
                     </button>
                 </form>
-                <?php if (isset($error)): ?>
-                    <div class="alert alert-danger alert-dismissible fade show mt-3" role="alert">
-                        <i class="bi bi-exclamation-triangle me-2"></i>
-                        <?php echo $error; ?>
-                        <button type="button" class="btn-close" data-bs-dismiss="alert"></button>
-                    </div>
-                <?php endif; ?>
             </div>
         </div>
     </main>
-    
+
     <footer class="bg-dark text-white text-center py-3 mt-5">
         <div class="container">
             <p class="mb-0">&copy; 2023 Progetto DB - Dashboard Cliente</p>
