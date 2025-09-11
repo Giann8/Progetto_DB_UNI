@@ -26,3 +26,6 @@ docker-volumes/
 # PHP
 vendor/
 composer.phar
+
+/docs/Immagini_funzioni/*
+*.pdf

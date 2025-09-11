@@ -30,7 +30,7 @@ if (isset($_POST['action'])) {
         case 'delete_prodotto':
             $prodotto_id = $_POST['id'] ?? null;
             if ($prodotto_id) {
-                $result = deleteProdotto($prodotto_id);
+                $result = eliminaProdottoNegozio($negozio_id, $prodotto_id);
                 if ($result['success']) {
                     $success_message = "Prodotto rimosso con successo.";
 
@@ -378,6 +378,7 @@ if ($negozio_id) {
                                             </span>
                                             <form action="<?php echo $pagelink; ?>" method="POST">
                                                 <input type="hidden" name="action" value="modifica_prezzo_prodotto">
+                                                <input type="hidden" name="negozio_id" value="<?php echo htmlspecialchars($negozio_id); ?>">
                                                 <input type="hidden" name="prodotto_id" value="<?php echo htmlspecialchars($prodotto['id']); ?>">
                                                 <div class="input-group">
                                                     <input type="number" name="nuovo_prezzo" class="form-control" step="0.01" min="0" placeholder="Nuovo Prezzo" required>
@@ -414,7 +415,6 @@ if ($negozio_id) {
             </div>
         </div>
 
-        <!-- Spazio tra le tabelle -->
         <div class="my-4"></div>
 
         <!-- Tabella tessere rilasciate -->

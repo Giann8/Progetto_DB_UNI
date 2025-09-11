@@ -457,6 +457,30 @@ function getProdottiNegozio($negozio_id): array
     }
     return $prodotto;
 }
+function eliminaProdottoNegozio($negozio_id, $prodotto_id)
+{
+    if (!isAuthorized()) {
+        return ['error' => 'Accesso non autorizzato.'];
+    }
+    global $db;
+
+    $sql = "DELETE FROM prodotto_negozio WHERE negozio = $1 AND prodotto = $2";
+    $name = "elimina_prodotto_negozio_" . uniqid();
+    $params = [$negozio_id, $prodotto_id];
+    $resource = pg_prepare($db, $name, $sql);
+    if (!$resource) {
+        echo "Errore nella preparazione della query." . pg_last_error($db);
+        return ['error' => 'Errore nella preparazione della query.'];
+    }
+    //aggiunto '@' per sopprimere warning del db
+    $resource = @pg_execute($db, $name, $params);
+
+    if (!$resource) {
+        echo "Errore nell'esecuzione della query." . pg_last_error($db);
+        return ['error' => 'Errore nell\'esecuzione della query.'];
+    }
+    return ['success' => true];
+}
 
 function modificaPrezzoProdottoNegozio($negozio_id, $prodotto_id, $nuovo_prezzo)
 {

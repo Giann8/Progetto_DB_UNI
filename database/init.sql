@@ -1,12 +1,12 @@
 CREATE TABLE manager (
-    C_F VARCHAR(100) PRIMARY KEY,
+    c_f VARCHAR(100) PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     email VARCHAR(100) UNIQUE,
     password VARCHAR(100) NOT NULL
 );
 
 CREATE TABLE clienti (
-    C_F VARCHAR(100) PRIMARY KEY,
+    c_f VARCHAR(100) PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
     email VARCHAR(100) UNIQUE,
     password VARCHAR(100) NOT NULL
@@ -15,14 +15,14 @@ CREATE TABLE clienti (
 CREATE TABLE prodotti (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
-    description TEXT
+    description TEXT NOT NULL
 );
 
 CREATE TABLE negozi (
     id SERIAL PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
-    address TEXT,
-    responsabile VARCHAR(100),
+    address TEXT NOT NULL,
+    responsabile VARCHAR(100) NOT NULL,
     orario_apertura TIME DEFAULT '09:00:00',
     orario_chiusura TIME DEFAULT '18:00:00'
 );
@@ -30,22 +30,22 @@ CREATE TABLE negozi (
 CREATE TABLE fatture(
     id SERIAL PRIMARY KEY,
     cliente VARCHAR(100) NOT NULL,
-    sconto DECIMAL(5, 2) DEFAULT 0.00,
+    sconto DECIMAL(5, 2) DEFAULT 0.00 CHECK (sconto >= 0 AND sconto <= 30),
     data_emissione DATE DEFAULT CURRENT_DATE NOT NULL,
-    totale DECIMAL(10, 2) DEFAULT 0.00,
-    FOREIGN KEY (cliente) REFERENCES clienti(C_F) ON DELETE CASCADE
+    totale DECIMAL(10, 2) DEFAULT 0.00 CHECK (totale >= 0),
+    FOREIGN KEY (cliente) REFERENCES clienti(c_f) ON DELETE CASCADE
 );
 
 CREATE TABLE fornitori (
-    P_IVA VARCHAR(100) PRIMARY KEY,
+    p_iva VARCHAR(100) PRIMARY KEY,
     name VARCHAR(100) NOT NULL,
-    indirizzo TEXT
+    indirizzo TEXT NOT NULL
 );
 
 CREATE TABLE fidelity_card (
     id SERIAL PRIMARY KEY,
-    cliente VARCHAR(100) REFERENCES clienti(C_F) ON DELETE CASCADE,
-    punti INT DEFAULT 0,
+    cliente VARCHAR(100) REFERENCES clienti(c_f) ON DELETE CASCADE,
+    punti INT DEFAULT 0 CHECK (punti >= 0),
     negozio INT REFERENCES negozi(id),
     data_rilascio DATE DEFAULT CURRENT_DATE,
     UNIQUE(cliente) 
@@ -54,16 +54,16 @@ CREATE TABLE fidelity_card (
 CREATE TABLE prodotto_negozio (
     prodotto INT REFERENCES prodotti(id) ON DELETE CASCADE,
     negozio INT REFERENCES negozi(id) ON DELETE CASCADE,
-    prezzo_unitario DECIMAL(10, 2) NOT NULL,
-    disponibilita INT DEFAULT 0,
+    prezzo_unitario DECIMAL(10, 2) NOT NULL CHECK (prezzo_unitario >= 0),
+    disponibilita INT NOT NULL DEFAULT 0 CHECK (disponibilita >= 0),
     PRIMARY KEY (prodotto, negozio)
 );
 
 CREATE TABLE prodotto_fornitore (
     prodotto INT REFERENCES prodotti(id) ON DELETE CASCADE,
-    fornitore VARCHAR REFERENCES fornitori(P_IVA) ON DELETE CASCADE,
-    prezzo_unitario DECIMAL(10, 2) NOT NULL,
-    disponibilita INT DEFAULT 0,
+    fornitore VARCHAR REFERENCES fornitori(p_iva) ON DELETE CASCADE,
+    prezzo_unitario DECIMAL(10, 2) NOT NULL CHECK (prezzo_unitario >= 0),
+    disponibilita INT DEFAULT 0 NOT NULL CHECK (disponibilita >= 0),
     PRIMARY KEY (prodotto, fornitore)
 );
 
@@ -73,13 +73,13 @@ CREATE TABLE ordini(
     manager_richiedente VARCHAR(100) ,
     negozio INT ,
     prodotto INT ,
-    quantita INT NOT NULL,
-    prezzo INT NOT NULL,
+    quantita INT NOT NULL CHECK (quantita > 0),
+    prezzo INT NOT NULL CHECK (prezzo >= 0),
     data_consegna DATE NOT NULL DEFAULT CURRENT_DATE + INTERVAL '7 days',
-    FOREIGN KEY (manager_richiedente) REFERENCES manager(C_F) ON DELETE CASCADE,
+    FOREIGN KEY (manager_richiedente) REFERENCES manager(c_f) ON DELETE CASCADE,
     FOREIGN KEY (negozio) REFERENCES negozi(id) ON DELETE CASCADE,
     FOREIGN KEY (prodotto) REFERENCES prodotti(id) ON DELETE CASCADE,
-    FOREIGN KEY (fornitore) REFERENCES fornitori(P_IVA) ON DELETE CASCADE
+    FOREIGN KEY (fornitore) REFERENCES fornitori(p_iva) ON DELETE CASCADE
 );
 
 CREATE TABLE riga_fattura (
@@ -89,17 +89,17 @@ CREATE TABLE riga_fattura (
     quantita INT NOT NULL CHECK (quantita > 0),
     subtotale DECIMAL(10, 2),
     FOREIGN KEY (fattura) REFERENCES fatture(id) ON DELETE CASCADE,
-    FOREIGN KEY (prodotto) REFERENCES prodotti(id) ON DELETE CASCADE,
-    FOREIGN KEY (negozio) REFERENCES negozi(id) ON DELETE CASCADE,
-    PRIMARY KEY (fattura, prodotto)
+    FOREIGN KEY (prodotto,negozio) REFERENCES prodotto_negozio(prodotto,negozio) ON DELETE CASCADE,
+    FOREIGN KEY (negozio, prodotto) REFERENCES prodotto_negozio(negozio, prodotto) ON DELETE CASCADE,
+    PRIMARY KEY (fattura, prodotto,negozio)
 );
 
 CREATE TABLE storico_tessere(
     tessera_id_originale SERIAL PRIMARY KEY,
     negozio_id INT NOT NULL,
     negozio_nome VARCHAR(100) NOT NULL,
-    cliente VARCHAR(100) REFERENCES clienti(C_F) ON DELETE CASCADE,
-    punti INT DEFAULT 0,
+    cliente VARCHAR(100) REFERENCES clienti(c_f) ON DELETE CASCADE,
+    punti INT DEFAULT 0 CHECK (punti >= 0),
     data_rilascio DATE NOT NULL,
     data_eliminazione_negozio DATE NOT NULL
 );
@@ -126,7 +126,7 @@ UPDATE OF password ON manager FOR EACH ROW EXECUTE FUNCTION md5_hash_password();
 CREATE OR REPLACE FUNCTION normalizzaInput() RETURNS TRIGGER AS $$
 BEGIN
     NEW.email = LOWER(NEW.email);
-    NEW.C_F = UPPER(NEW.C_F);
+    NEW.c_f = UPPER(NEW.c_f);
     RETURN NEW;
 END;
 $$ LANGUAGE plpgsql;
@@ -148,12 +148,6 @@ VALUES (
         'Mario Manager',
         'mario.manager@example.com',
         'managerpass'
-    ),
-    (
-        'MGMT87654321', 
-        'Luigi Supervisor',
-        'luigi.supervisor@example.com',
-        'supervisorpass'
     );
 
 -- Inserimento dati (le password verranno hashate automaticamente)
@@ -187,82 +181,75 @@ VALUES (
         '20:00:00'
     );
 
--- Inserimento prodotti
+-- Inserimento prodotti di uso quotidiano a prezzi accessibili
 INSERT INTO prodotti (name, description)
 VALUES 
-    ('iPhone 15', 'Smartphone Apple con chip A17 Pro, fotocamera avanzata e design premium'),
-    ('Samsung Galaxy S24', 'Smartphone Android con display AMOLED e AI integrata'),
-    ('MacBook Air M3', 'Laptop ultraleggero Apple con chip M3 e batteria a lunga durata'),
-    ('Dell XPS 13', 'Laptop Windows compatto con display InfinityEdge'),
-    ('AirPods Pro', 'Auricolari wireless con cancellazione attiva del rumore'),
-    ('Sony WH-1000XM5', 'Cuffie over-ear con cancellazione del rumore premium'),
-    ('iPad Air', 'Tablet Apple con chip M2 e supporto Apple Pencil'),
-    ('Nintendo Switch', 'Console gaming ibrida portatile/fissa'),
-    ('PlayStation 5', 'Console gaming di nuova generazione Sony'),
-    ('Kindle Paperwhite', 'E-reader con display ad alta risoluzione e luce regolabile'),
-    ('Apple Watch Series 9', 'Smartwatch con monitoraggio salute avanzato'),
-    ('Canon EOS R8', 'Fotocamera mirrorless full-frame per fotografia professionale'),
-    ('Dyson V15', 'Aspirapolvere cordless con tecnologia laser'),
-    ('Bose SoundLink', 'Speaker Bluetooth portatile con audio premium'),
-    ('GoPro Hero 12', 'Action camera 4K impermeabile per sport estremi');
+    ('Quaderno A4', 'Quaderno a righe 80 pagine per scuola e ufficio'),
+    ('Penna Bic Blu', 'Penna a sfera colore blu, scrittura fluida'),
+    ('Matita HB', 'Matita in grafite durezza HB per disegno e scrittura'),
+    ('Gomma da cancellare', 'Gomma bianca per matita, alta qualità'),
+    ('Righello 30cm', 'Righello in plastica trasparente con misure precise'),
+    ('Temperino', 'Temperino a due fori per matite normali e colorate'),
+    ('Evidenziatore Giallo', 'Evidenziatore fluorescente giallo per studiare'),
+    ('Colla Stick', 'Colla in stick 15g, ideale per carta e cartone'),
+    ('Forbici', 'Forbici da ufficio con lame in acciaio inox'),
+    ('Blocco Note', 'Blocco appunti 50 fogli con perforazione'),
+    ('Graffette Metalliche', 'Confezione 100 graffette per documenti');
 
--- Inserimento fornitori
+-- Inserimento fornitori di materiale per ufficio
 INSERT INTO fornitori (P_IVA, name, indirizzo)
 VALUES 
-    ('IT12345678901', 'TechSupply SRL', 'Via Milano 123, Milano'),
-    ('IT98765432109', 'ElectroWholesale SpA', 'Corso Roma 456, Roma'),
-    ('IT55555555555', 'DigitalWorld SNC', 'Viale Torino 789, Torino');
+    ('IT11111111111', 'Cartoleria Centrale SRL', 'Via della Stazione 15, Milano'),
+    ('IT22222222222', 'Office Supply SpA', 'Corso Europa 78, Roma'),
+    ('IT33333333333', 'Distribuzione Ufficio SNC', 'Via Veneto 42, Napoli');
 
--- Inserimento prodotti nei negozi con prezzi e disponibilità
+-- Inserimento prodotti nei negozi con prezzi bassi e buona disponibilità
 INSERT INTO prodotto_negozio (prodotto, negozio, prezzo_unitario, disponibilita)
 VALUES 
-    -- Negozio 1 (Via Roma)
-    (1, 1, 999.99, 15),   -- iPhone 15
-    (2, 1, 899.99, 8),    -- Samsung Galaxy S24
-    (3, 1, 1299.99, 5),   -- MacBook Air M3
-    (5, 1, 279.99, 25),   -- AirPods Pro
-    (7, 1, 649.99, 10),   -- iPad Air
-    (8, 1, 329.99, 12),   -- Nintendo Switch
-    (10, 1, 149.99, 20),  -- Kindle Paperwhite
-    (11, 1, 429.99, 7),   -- Apple Watch Series 9
+    -- Negozio 1 (Via Roma) - Cartoleria e materiale per ufficio
+    (1, 1, 2.50, 100),   -- Quaderno A4
+    (2, 1, 0.85, 200),   -- Penna Bic Blu
+    (3, 1, 0.60, 150),   -- Matita HB
+    (4, 1, 1.20, 80),    -- Gomma da cancellare
+    (5, 1, 3.50, 50),    -- Righello 30cm
+    (6, 1, 2.80, 60),    -- Temperino
+    (7, 1, 1.90, 90),    -- Evidenziatore Giallo
+    (8, 1, 4.20, 70),    -- Colla Stick
     
-    -- Negozio 2 (Via Milano)
-    (1, 2, 989.99, 10),   -- iPhone 15 (prezzo leggermente diverso)
-    (2, 2, 879.99, 15),   -- Samsung Galaxy S24
-    (4, 2, 1199.99, 6),   -- Dell XPS 13
-    (6, 2, 399.99, 8),    -- Sony WH-1000XM5
-    (9, 2, 549.99, 3),    -- PlayStation 5
-    (12, 2, 1899.99, 2),  -- Canon EOS R8
-    (13, 2, 649.99, 4),   -- Dyson V15
-    (14, 2, 199.99, 12),  -- Bose SoundLink
-    (15, 2, 449.99, 6);   -- GoPro Hero 12
+    -- Negozio 2 (Via Milano) - Prezzi leggermente diversi
+    (1, 2, 2.80, 80),    -- Quaderno A4
+    (2, 2, 0.90, 180),   -- Penna Bic Blu
+    (3, 2, 0.65, 120),   -- Matita HB
+    (9, 2, 8.50, 25),    -- Forbici
+    (10, 2, 3.70, 40),   -- Blocco Note
+    (11, 2, 2.10, 100);  -- Graffette Metalliche
 
--- Inserimento prodotti dai fornitori con prezzi e disponibilità
+-- Inserimento prodotti dai fornitori con prezzi all'ingrosso convenienti
 INSERT INTO prodotto_fornitore (prodotto, fornitore, prezzo_unitario, disponibilita)
 VALUES 
-    -- iPhone 15 (id=1) da diversi fornitori con prezzi diversi
-    (1, 'IT12345678901', 850.00, 50),   -- TechSupply - prezzo più basso
-    (1, 'IT98765432109', 870.00, 30),   -- ElectroWholesale
-    (1, 'IT55555555555', 890.00, 20),   -- DigitalWorld
+    -- Quaderno A4 (id=1) da diversi fornitori
+    (1, 'IT11111111111', 1.80, 500),   -- Cartoleria Centrale - prezzo più basso
+    (1, 'IT22222222222', 1.90, 300),   -- Office Supply
+    (1, 'IT33333333333', 2.00, 400),   -- Distribuzione Ufficio
     
-    -- Samsung Galaxy S24 (id=2) da diversi fornitori
-    (2, 'IT12345678901', 780.00, 40),   -- TechSupply
-    (2, 'IT98765432109', 750.00, 60),   -- ElectroWholesale - prezzo più basso
-    (2, 'IT55555555555', 800.00, 25),   -- DigitalWorld
+    -- Penna Bic Blu (id=2) da diversi fornitori
+    (2, 'IT11111111111', 0.55, 1000),  -- Cartoleria Centrale
+    (2, 'IT22222222222', 0.50, 1200),  -- Office Supply - prezzo più basso
+    (2, 'IT33333333333', 0.60, 800),   -- Distribuzione Ufficio
     
-    -- MacBook Air M3 (id=3) da diversi fornitori  
-    (3, 'IT12345678901', 1150.00, 15),  -- TechSupply - prezzo più basso
-    (3, 'IT98765432109', 1200.00, 10),  -- ElectroWholesale
+    -- Matita HB (id=3) da diversi fornitori  
+    (3, 'IT11111111111', 0.40, 800),   -- Cartoleria Centrale - prezzo più basso
+    (3, 'IT22222222222', 0.45, 600),   -- Office Supply
     
-    -- AirPods Pro (id=5) da diversi fornitori
-    (5, 'IT12345678901', 230.00, 100),  -- TechSupply
-    (5, 'IT98765432109', 220.00, 80),   -- ElectroWholesale - prezzo più basso
-    (5, 'IT55555555555', 240.00, 60),   -- DigitalWorld
+    -- Gomma da cancellare (id=4) da diversi fornitori
+    (4, 'IT11111111111', 0.80, 400),   -- Cartoleria Centrale
+    (4, 'IT22222222222', 0.75, 500),   -- Office Supply - prezzo più basso
+    (4, 'IT33333333333', 0.90, 300),   -- Distribuzione Ufficio
     
-    -- PlayStation 5 (id=9) da diversi fornitori
-    (9, 'IT12345678901', 480.00, 20),   -- TechSupply - prezzo più basso
-    (9, 'IT98765432109', 500.00, 15),   -- ElectroWholesale
-    (9, 'IT55555555555', 520.00, 10);   -- DigitalWorld
+    -- Righello 30cm (id=5) da diversi fornitori
+    (5, 'IT11111111111', 2.20, 200),   -- Cartoleria Centrale - prezzo più basso
+    (5, 'IT22222222222', 2.50, 150),   -- Office Supply
+    (5, 'IT33333333333', 2.80, 180);   -- Distribuzione Ufficio
 
 
 
@@ -319,18 +306,7 @@ JOIN prodotto_negozio pn ON n.id = pn.negozio
 JOIN prodotti p ON pn.prodotto = p.id
 ORDER BY p.name,pn.prezzo_unitario ASC,pn.disponibilita DESC;
 
--- VIEW: Solo prodotti disponibili
-CREATE VIEW prodotti_disponibili AS 
-SELECT 
-    n.name as negozio,
-    p.name as prodotto,
-    pn.prezzo_unitario,
-    pn.disponibilita
-FROM negozi n
-JOIN prodotto_negozio pn ON n.id = pn.negozio
-JOIN prodotti p ON pn.prodotto = p.id
-WHERE pn.disponibilita > 0
-ORDER BY n.name, pn.prezzo_unitario;
+
 
 -- VIEW: Tessere con più di 300 punti
 CREATE VIEW tessere_maggiori_punti AS
@@ -446,7 +422,8 @@ END;
 $$ LANGUAGE plpgsql;
 
 -- Trigger per aggiornare disponibilità prodotti da fornitore dopo ordine
-CREATE TRIGGER aggiorna_disponibilita_prodotto_fornitore AFTER INSERT ON ordini
+CREATE TRIGGER aggiorna_disponibilita_prodotto_fornitore 
+AFTER INSERT ON ordini
     FOR EACH ROW
     EXECUTE FUNCTION aggiorna_disponibilita_prodotto_fornitore();
 
@@ -458,7 +435,14 @@ CREATE VIEW sconti_clienti AS (
                WHEN fc.punti >= 200 THEN 15.00
                WHEN fc.punti >= 100 THEN 5.00
                ELSE 0.00
-           END AS sconto_percentuale
+           END AS sconto_percentuale,
+              CASE
+                WHEN fc.punti >= 300 THEN 300
+                WHEN fc.punti >= 200 THEN 200
+                WHEN fc.punti >= 100 THEN 100
+                ELSE 0
+              END
+           AS punti_decurtati
     FROM fidelity_card fc JOIN clienti c on fc.cliente = c.C_F
 );
 
@@ -500,6 +484,31 @@ AFTER INSERT ON riga_fattura
 FOR EACH ROW
 EXECUTE FUNCTION aggiorna_disponibilita_prodotto_negozio();
 
+-- Funzione per calcolare il subtotale della riga fattura
+CREATE OR REPLACE FUNCTION calcola_subtotale_riga_fattura() RETURNS trigger AS $$
+DECLARE
+    prezzo_unitario DECIMAL;
+BEGIN
+    SELECT pn.prezzo_unitario
+    INTO prezzo_unitario
+    FROM prodotto_negozio pn
+    WHERE pn.prodotto = NEW.prodotto AND pn.negozio = NEW.negozio;
+
+    NEW.subtotale := prezzo_unitario * NEW.quantita;
+
+    RAISE NOTICE 'Riga fattura: prodotto %, negozio %, quantità %, subtotale €%', 
+                 NEW.prodotto, NEW.negozio, NEW.quantita, NEW.subtotale;
+
+    RETURN NEW;
+END;
+$$ LANGUAGE plpgsql;
+
+-- Trigger per calcolare il subtotale della riga fattura
+CREATE TRIGGER calcola_subtotale_riga_fattura
+BEFORE INSERT ON riga_fattura
+FOR EACH ROW
+EXECUTE FUNCTION calcola_subtotale_riga_fattura();
+
 -- Funzione trigger per aggiungere tessere nello storico
 CREATE OR REPLACE FUNCTION aggiorna_tessere_negozi_eliminati() RETURNS TRIGGER AS $$
 DECLARE
@@ -531,11 +540,11 @@ EXECUTE FUNCTION aggiorna_tessere_negozi_eliminati();
 CREATE or REPLACE function valida_fattura() RETURNS TRIGGER AS $$
 DECLARE
     punti_decurtati INT;
-    sconto_percentuale NUMERIC DEFAULT 0;
+    sconto_percentuale DECIMAL(5,2) DEFAULT 0;
     sconto_euro DECIMAL(10,2) DEFAULT 0;
     totale_effettivo DECIMAL(10, 2);
 BEGIN
-    SELECT sc.punti, sc.sconto_percentuale
+    SELECT sc.punti_decurtati, sc.sconto_percentuale
     FROM sconti_clienti sc
     WHERE sc.cliente = NEW.cliente 
     INTO punti_decurtati, sconto_percentuale;
@@ -555,6 +564,7 @@ BEGIN
         
         RAISE NOTICE 'Sconto applicato per il cliente %: €%', NEW.cliente, sconto_euro;
     ELSE
+        sconto_percentuale=0;
         RAISE NOTICE 'Sconto non applicato per il cliente %', NEW.cliente;
     END IF;
     
@@ -565,8 +575,8 @@ BEGIN
     NEW.totale := totale_effettivo;
     NEW.sconto := sconto_percentuale;
 
-    RAISE NOTICE 'Fattura rilasciata per il cliente %: totale originale €%, totale finale €%', 
-                 NEW.cliente, (NEW.totale + sconto_euro), NEW.totale;
+    RAISE NOTICE 'Fattura rilasciata per il cliente %: totale originale €%, totale finale €%,sconto percentuale %%%', 
+                 NEW.cliente, (NEW.totale + sconto_euro), NEW.totale,NEW.sconto;
     
     RETURN NEW;
 END;

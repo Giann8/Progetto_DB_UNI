@@ -24,7 +24,7 @@ function createBill($cartItems, $wantSconto = FALSE): array
 
             $bill['totale'] += $row['prezzo_unitario'] * $item['quantita'];
         } else {
-            throw new Exception("Prodotto non trovato");
+            return ['errore'=>'Prodotto non trovato: ' . htmlspecialchars(print_r($item, true))];
         }
     }
     if ($wantSconto) {
@@ -37,14 +37,15 @@ function createBill($cartItems, $wantSconto = FALSE): array
 function addItemToBill($bill, $id_fattura, $key_prodotto)
 {
     global $db;
-    $sql = "INSERT INTO riga_fattura(fattura,prodotto,negozio,quantita,subtotale) VALUES ($1, $2, $3, $4, $5)";
-    $params = array($id_fattura, $bill['articoli'][$key_prodotto]['prodotto'], $bill['articoli'][$key_prodotto]['negozio'], $bill['articoli'][$key_prodotto]['quantita'], $bill['articoli'][$key_prodotto]['prezzo_unitario'] * $bill['articoli'][$key_prodotto]['quantita']);
-    $resource = pg_prepare($db, "add_item_to_bill", $sql);
+    $sql = "INSERT INTO riga_fattura(fattura,prodotto,negozio,quantita) VALUES ($1, $2, $3, $4)";
+    $params = array($id_fattura, $bill['articoli'][$key_prodotto]['prodotto'], $bill['articoli'][$key_prodotto]['negozio'], $bill['articoli'][$key_prodotto]['quantita']);
+    $name="add_item_to_bill_".uniqid();
+    $resource = pg_prepare($db, $name, $sql);
     if (!$resource) {
         echo "Errore nella preparazione della query: " . pg_last_error($db);
         return false;
     }
-    $resource = pg_execute($db, "add_item_to_bill", $params);
+    $resource = pg_execute($db, $name, $params);
     if (!$resource) {
         echo "Errore nell'esecuzione della query: " . pg_last_error($db);
         return false;

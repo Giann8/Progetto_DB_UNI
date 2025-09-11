@@ -8,7 +8,7 @@ services:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
     ports:
-      - "5432:5432"
+      - "${POSTGRES_PORT}:5432"
     volumes:
       - ./database/init.sql:/docker-entrypoint-initdb.d/init.sql
     networks:
@@ -19,7 +19,7 @@ services:
       context: ./web
       dockerfile: Dockerfile
     ports:
-      - "8080:80"
+      - "${WEB_PORT}:80"
     depends_on:
       - postgres
     environment:
@@ -27,7 +27,7 @@ services:
       - POSTGRES_USER=${POSTGRES_USER}
       - POSTGRES_PASSWORD=${POSTGRES_PASSWORD}
       - PHP_DB_HOST=postgres
-      - PHP_DB_PORT=5432
+      - PHP_DB_PORT=${POSTGRES_PORT}
     volumes:
       - ./web:/var/www/html
     networks:

@@ -28,7 +28,7 @@ if (isset($_POST['action']) && $_POST['action'] === 'update_quantity' && isset($
     $prodotto_id = $_POST['prodotto_id'];
     $negozio_id = $_POST['negozio_id'];
     $nuova_quantita = max(1, intval($_POST['nuova_quantita'])); // Minimo 1
-    
+
     updateCartQuantity($prodotto_id, $negozio_id, $nuova_quantita);
     header("Location: " . $_SERVER['PHP_SELF']);
     exit();
@@ -39,11 +39,15 @@ if (isset($_POST['action']) && $_POST['action'] === 'create_bill') {
     $cartItems = $_SESSION['carrello'] ?? [];
     if (!empty($cartItems)) {
         $bill = createBill($cartItems, isset($_POST['discount']) && $_POST['discount'] === 'TRUE');
-        sendBill($bill);
-        clearCart();
-        // Redirect dopo l'acquisto per evitare refresh accidentali
-        header("Location: dashboard_cliente.php?acquisto=successo");
-        exit();
+        if (!isset($bill['errore'])) {
+            sendBill($bill);
+            clearCart();
+            // Redirect dopo l'acquisto per evitare refresh accidentali
+            header("Location: dashboard_cliente.php?acquisto=successo");
+            exit();
+        } else {
+            $error_message = $bill['errore'];
+        }
     }
 }
 
@@ -52,7 +56,7 @@ if (!isLoggedIn() || !isCliente()) {
     exit();
 }
 
-if(hasFidelityCard($_SESSION['user_id'])) {
+if (hasFidelityCard($_SESSION['user_id'])) {
     $sconto = getScontoCliente($_SESSION['user_id']);
 }
 
@@ -71,7 +75,7 @@ if(hasFidelityCard($_SESSION['user_id'])) {
 
 <body class="d-flex flex-column min-vh-100">
     <?php include('navbar.php'); ?>
-    
+
     <!-- Header del carrello -->
     <header class="bg-success text-white py-4">
         <div class="container">
@@ -98,8 +102,15 @@ if(hasFidelityCard($_SESSION['user_id'])) {
             </div>
         </div>
     </header>
-    
+
     <main class="container my-5 flex-grow-1">
+        <?php if (isset($error_message)): ?>
+            <div class="alert alert-danger alert-dismissible fade show" role="alert">
+                <i class="bi bi-exclamation-triangle me-2"></i>
+                <?php echo htmlspecialchars($error_message); ?>
+                <button type="button" class="btn-close" data-bs-dismiss="alert" aria-label="Close"></button>
+            </div>
+        <?php endif; ?>
         <?php if (isset($_SESSION['carrello']) && count($_SESSION['carrello']) > 0): ?>
             <?php
             $total = 0;
@@ -111,14 +122,14 @@ if(hasFidelityCard($_SESSION['user_id'])) {
                 $totalQuantity += $item['quantita'];
             }
             ?>
-            
+
             <!-- Riepilogo rapido del carrello -->
             <div class="row mb-4">
                 <div class="col-md-8">
                     <div class="alert alert-info d-flex align-items-center">
                         <i class="bi bi-info-circle me-2"></i>
                         <span>
-                            <strong><?php echo $totalItems; ?> prodotti diversi</strong> nel carrello 
+                            <strong><?php echo $totalItems; ?> prodotti diversi</strong> nel carrello
                             per un totale di <strong><?php echo $totalQuantity; ?> pezzi</strong>
                         </span>
                     </div>
@@ -165,17 +176,17 @@ if(hasFidelityCard($_SESSION['user_id'])) {
                                                     <input type="hidden" name="prodotto_id" value="<?php echo $item['prodotto_id']; ?>">
                                                     <input type="hidden" name="negozio_id" value="<?php echo $item['negozio_id']; ?>">
                                                     <input type="hidden" name="nuova_quantita" value="<?php echo max(1, $item['quantita'] - 1); ?>">
-                                                    <button type="submit" 
-                                                            class="btn btn-outline-secondary btn-sm"
-                                                            <?php echo $item['quantita'] <= 1 ? 'disabled' : ''; ?>>
+                                                    <button type="submit"
+                                                        class="btn btn-outline-secondary btn-sm"
+                                                        <?php echo $item['quantita'] <= 1 ? 'disabled' : ''; ?>>
                                                         <i class="bi bi-dash"></i>
                                                     </button>
                                                 </form>
-                                                
+
                                                 <span class="fw-bold mx-2" style="min-width: 30px; text-align: center;">
                                                     <?php echo $item['quantita']; ?>
                                                 </span>
-                                                
+
                                                 <!-- Pulsante aumenta -->
                                                 <form method="POST" action="<?php echo $_SERVER["PHP_SELF"]; ?>" class="m-0">
                                                     <input type="hidden" name="action" value="update_quantity">
@@ -198,9 +209,9 @@ if(hasFidelityCard($_SESSION['user_id'])) {
                                                 <input type="hidden" name="action" value="remove_from_cart">
                                                 <input type="hidden" name="prodotto_id" value="<?php echo htmlspecialchars($item['prodotto_id']); ?>">
                                                 <input type="hidden" name="negozio_id" value="<?php echo htmlspecialchars($item['negozio_id']); ?>">
-                                                <button type="submit" 
-                                                        class="btn btn-outline-danger btn-sm"
-                                                        onclick="return confirm('Rimuovere questo prodotto dal carrello?')">
+                                                <button type="submit"
+                                                    class="btn btn-outline-danger btn-sm"
+                                                    onclick="return confirm('Rimuovere questo prodotto dal carrello?')">
                                                     <i class="bi bi-trash"></i>
                                                 </button>
                                             </form>
@@ -227,7 +238,7 @@ if(hasFidelityCard($_SESSION['user_id'])) {
                                         <i class="bi bi-star-fill text-warning me-2"></i>
                                         <small>Tessera fedeltà: sconto del <?php echo $sconto; ?>% disponibile</small>
                                     </div>
-                                    
+
                                     <div class="form-check">
                                         <input class="form-check-input" type="radio" name="discount" value="TRUE" id="discount_si" onchange="updateTotal()">
                                         <label class="form-check-label" for="discount_si">
@@ -241,25 +252,25 @@ if(hasFidelityCard($_SESSION['user_id'])) {
                                         </label>
                                     </div>
                                 </div>
-                                
+
                                 <div class="d-flex justify-content-between text-success mb-2" id="sconto-row" style="display: none !important;">
                                     <span>Sconto applicato:</span>
                                     <span id="sconto-amount" class="fw-bold">-€0.00</span>
                                 </div>
                             <?php endif; ?>
-                            
+
                             <div class="d-flex justify-content-between mb-3 border-top pt-3">
                                 <strong class="fs-5">Totale:</strong>
                                 <strong class="fs-4 text-success" id="totale-finale">€<?php echo number_format($total, 2); ?></strong>
                             </div>
-                            
+
                             <form method="POST" action="<?php echo $_SERVER["PHP_SELF"]; ?>" class="d-grid">
                                 <input type="hidden" name="action" value="create_bill">
                                 <button type="submit" class="btn btn-success btn-lg">
                                     <i class="bi bi-credit-card me-2"></i>Acquista Ora
                                 </button>
                             </form>
-                            
+
                             <div class="text-center mt-3">
                                 <small class="text-muted">
                                     <i class="bi bi-shield-check me-1"></i>
